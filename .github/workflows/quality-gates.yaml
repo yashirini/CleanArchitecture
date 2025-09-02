@@ -1,0 +1,36 @@
+# Nombre: .github/workflows/quality-gates.yml
+name: Quality Gates
+
+on:
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  quality-checks:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v3
+      with:
+        dotnet-version: '8.0.x'
+        
+    - name: Run tests with coverage
+      run: |
+        dotnet test --collect:"XPlat Code Coverage" --logger:trx
+        coverage=$(grep -oP 'Line coverage=\K[0-9.]+' coverage.cobertura.xml)
+        if (( $(echo "$coverage < 80" | bc -l) )); then
+          echo "Code coverage below 80%: $coverage"
+          exit 1
+        fi
+        
+    - name: Check for vulnerabilities
+      run: |
+        vulnerabilities=$(dotnet list package --vulnerable --format json | jq '.vulnerablePackages | length')
+        if [ $vulnerabilities -gt 0 ]; then
+          echo "Found $vulnerabilities vulnerable packages"
+          exit 1
+        fi
